@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Betdicas100%</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
+    body { background-color: #121212; color: #e5e5e5; padding: 20px; }
+    header { background-color: #000; color: #FFD700; padding: 40px 20px; border-radius: 12px; text-align: center; margin-bottom: 30px; box-shadow: 0 8px 20px rgba(255, 215, 0, 0.3); }
+    header h1 { font-size: 36px; font-weight: bold; margin-bottom: 15px; }
+    button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; margin: 5px; font-size: 15px; transition: background 0.3s ease, transform 0.2s; }
+    .btn-vip { background-color: #FFD700; color: #000; font-weight: bold; }
+    .btn-vip:hover { background-color: #e5c100; transform: scale(1.05); }
+    .btn-clear { background-color: #8b0000; color: white; }
+    .btn-clear:hover { background-color: #a30000; transform: scale(1.05); }
+    .container { max-width: 950px; margin: 0 auto; background-color: #1e1e1e; padding: 30px; border-radius: 14px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.05); }
+    input[type="text"] { width: 100%; padding: 12px 15px; margin: 20px 0; border: 1px solid #FFD700; border-radius: 8px; font-size: 15px; background-color: #121212; color: #fff; }
+    .game { background: #2a2a2a; border-left: 5px solid #FFD700; padding: 15px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    .game.vip { background: #1a0000; border-left: 5px solid #ff0000; box-shadow: 0 0 10px rgba(255, 0, 0, 0.4); color: #ffdddd; }
+    .game.vip button { background-color: #ff0000; color: #fff; }
+    .game.vip button:hover { background-color: #cc0000; transform: scale(1.05); }
+    .previsao { background-color: #1a1a1a; padding: 10px; border-radius: 6px; margin-top: 10px; font-size: 14px; color: #FFD700; }
+    .ranking { margin-top: 30px; background-color: #1a1a1a; padding: 20px; border-radius: 10px; }
+    .ranking h3 { margin-bottom: 10px; font-size: 18px; color: #FFD700; }
+    .ranking ul { list-style: none; }
+    .ranking li { padding: 6px 0; border-bottom: 1px solid #333; font-size: 14px; }
+    .stats { margin-top: 20px; font-weight: bold; color: #FFD700; }
+    canvas { margin-top: 15px; max-width: 100%; background-color: white; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="welcome">Betdicas100%</h1>
+    <button class="btn-vip" onclick="entrarVIP()">Entrar VIP</button>
+    <button class="btn-clear" onclick="limparNome()">Limpar Nome</button>
+  </header>
+
+  <div class="container">
+    <h2>Jogos do Dia</h2>
+    <input type="text" id="searchInput" placeholder="🔍 Buscar por time ou liga..." oninput="filtrarJogos()" />
+    <button class="btn-vip" onclick="carregarJogos()">🔄 Atualizar Jogos</button>
+    <div id="jogos"></div>
+    <div class="stats" id="stats"></div>
+    <div class="ranking">
+      <h3>🏆 Ranking de Acertos</h3>
+      <ul>
+        <li>João (12 acertos)</li>
+        <li>Maria (10 acertos)</li>
+        <li>Carlos (8 acertos)</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    let nomeSalvo = localStorage.getItem('nome');
+    if (!nomeSalvo) {
+      nomeSalvo = prompt("Qual é o seu nome?");
+      if (nomeSalvo) localStorage.setItem('nome', nomeSalvo);
+      else nomeSalvo = "Visitante";
+    }
+    document.getElementById("welcome").textContent = `Olá, ${nomeSalvo} - Betdicas100%`;
+
+    function limparNome() {
+      localStorage.removeItem('nome');
+      localStorage.removeItem('vip');
+      localStorage.removeItem(`palpites-${new Date().toISOString().split("T")[0]}`);
+      location.reload();
+    }
+
+    function entrarVIP() {
+      const senha = prompt("Digite a senha VIP:");
+      if (senha === "1000kz") {
+        alert("Acesso VIP autorizado!");
+        localStorage.setItem("vip", "true");
+        location.reload();
+      } else {
+        alert("Senha incorreta!");
+      }
+    }
+
+    let isVIP = localStorage.getItem("vip") === "true";
+    const jogosDiv = document.getElementById("jogos");
+    const apiKey = '123'; // <-- Substitua pela sua chave válida da API
+
+    async function carregarJogos() {
+      jogosDiv.innerHTML = "";
+      const hoje = new Date().toISOString().split("T")[0];
+      const cacheKey = `palpites-${hoje}`;
+      let palpitesSalvos = JSON.parse(localStorage.getItem(cacheKey)) || [];
+
+      try {
+        const resp = await fetch(`https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsday.php?d=${hoje}&s=Soccer`);
+        if (!resp.ok) throw new Error(resp.statusText);
+        const data = await resp.json();
+        const matches = data.events || [];
+
+        if (matches.length === 0) {
+          jogosDiv.innerHTML = "<p>📭 Nenhum jogo disponível hoje.</p>";
+        } else {
+          matches.slice(0, 10).forEach((match, index) => {
+            const time1 = match.strHomeTeam || "Time A";
+            const time2 = match.strAwayTeam || "Time B";
+            const liga = match.strLeague || "Liga Desconhecida";
+
+            let palpite = palpitesSalvos[index];
+            if (!palpite) {
+              const acerto = Math.random() * 0.5 + 0.5;
+              palpite = {
+                acerto,
+                vip: acerto > 0.7,
+                gratis: acerto >= 0.5 && acerto <= 0.7,
+                gols: Math.random() > 0.5 ? 'Mais de 2.5' : 'Menos de 2.5',
+                vencedor: Math.random() > 0.5 ? time1 : time2,
+                escanteios: Math.floor(Math.random() * 6 + 8),
+                cartoes: Math.floor(Math.random() * 4 + 2)
+              };
+              palpitesSalvos[index] = palpite;
+            }
+
+            const { acerto, vip, gratis, gols, vencedor, escanteios, cartoes } = palpite;
+
+            if ((gratis && !vip) || (vip && isVIP)) {
+              const div = document.createElement("div");
+              div.className = "game" + (vip ? " vip" : "");
+
+              div.innerHTML = `
+                <strong>${time1} vs ${time2}</strong><br>
+                <em>${liga}</em><br>
+                <button class="btn-vip" onclick="mostrarGrafico(${index}, '${time1}', '${time2}', ${Math.round(acerto * 100)})">📊 Estatísticas</button>
+                <div class="previsao">
+                  🔮 <strong>Palpite IA</strong><br>
+                  Vitória provável: <b>${vencedor}</b><br>
+                  Total de gols: <b>${gols}</b><br>
+                  ${isVIP ? `Escanteios estimados: <b>${escanteios}+</b><br>
+                  Cartões previstos: <b>${cartoes}+</b><br>` : ``}
+                  Confiança: <b>${Math.round(acerto * 100)}%</b>
+                </div>
+                <div id="grafico${index}" style="display:none;"><canvas id="chart${index}"></canvas></div>
+              `;
+              jogosDiv.appendChild(div);
+            }
+          });
+
+          localStorage.setItem(cacheKey, JSON.stringify(palpitesSalvos));
+        }
+
+        document.getElementById("stats").innerHTML = `✅ Palpites acertados hoje: ${Math.floor(Math.random() * 5 + 1)}/5`;
+      } catch (err) {
+        console.warn("Erro ao carregar dados da API:", err);
+        jogosDiv.innerHTML = "<p>⚠️ Falha ao carregar jogos.</p>";
+        document.getElementById("stats").innerHTML = "";
+      }
+    }
+
+    function mostrarGrafico(index, time1, time2, confianca) {
+      const chartDiv = document.getElementById(`grafico${index}`);
+      chartDiv.style.display = chartDiv.style.display === "none" ? "block" : "none";
+
+      const ctx = document.getElementById(`chart${index}`).getContext("2d");
+      if (window[`grafico${index}`]) {
+        window[`grafico${index}`].destroy();
+      }
+
+      window[`grafico${index}`] = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: [time1, time2, "Empate"],
+          datasets: [{
+            label: "Probabilidade (%)",
+            data: [
+              confianca,
+              100 - confianca - 10,
+              10
+            ],
+            backgroundColor: ["#4caf50", "#f44336", "#2196f3"]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: "Previsão de Resultado" }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100
+            }
+          }
+        }
+      });
+    }
+
+    function filtrarJogos() {
+      const termo = document.getElementById("searchInput").value.toLowerCase();
+      document.querySelectorAll(".game").forEach(jogo => {
+        jogo.style.display = jogo.textContent.toLowerCase().includes(termo) ? "block" : "none";
+      });
+    }
+
+    carregarJogos();
+  </script>
+</body>
+</html>
+
